@@ -1,5 +1,5 @@
 # Karlbot
-카카오톡 자동응답을 위한 봇입니다.
+카카오톡 자동응답을 위한 챗봇입니다.
 
 ## 설치
 안드로이드 기기에 설치한 뒤 메인 UI를 통해 권한을 부여해주세요.
@@ -12,7 +12,7 @@ https://play.google.com/store/apps/details?id=com.google.android.wearable.app
 
 /start : 이 메시지 출력\
 /say : 말시키기\
-/game : 준비중\
+/game : 가상주식 게임\
 /quiz : 준비중\
 /dice : 랜덤 주사위\
 /naver : 네이버 검색\
