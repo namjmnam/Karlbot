@@ -20,14 +20,20 @@ class NotiListener : NotificationListenerService() {
 
     private val client = OkHttpClient()
 
-    var question = "오락실을 지키는 수호신 용 두 마리는 뭘까요?\n" + "정답은 '/answer'를 입력하세요."
-    var answer = "정답: 일인용과 이인용"
+    // 고정
+    val question = "오락실을 지키는 수호신 용 두 마리는 뭘까요?\n" + "정답은 '/answer'를 입력하세요."
+    val answer = "정답: 일인용과 이인용"
+    val tax = 0.3F
+    val fee = 0.015F
+    val interest = 0.5F
+
+    //변동
     var gameMode = false
     var quizMode = false
     var saved = ""
     var balance = 1000000F
     var stocks = 0
-    var price = ""
+    var price = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -74,7 +80,7 @@ class NotiListener : NotificationListenerService() {
                                     "등록된 명령어:\n" +
                                     "/start : 이 메시지 출력\n" +
                                     "/say : 말시키기\n" +
-                                    "/game : 준비중\n" +
+                                    "/game : 가상주식 게임\n" +
                                     "/quiz : 준비중\n" +
                                     "/dice : 랜덤 주사위\n" +
                                     "/naver : 네이버 검색\n" +
@@ -99,42 +105,64 @@ class NotiListener : NotificationListenerService() {
 
                         if (contents.contains(" : /balance") && gameMode) {
                             stockAPI()
-                            var asset = 0
+                            var asset = balance + stocks * price
                             var won = moneyConvert(balance)
+                            var max = (balance / (price * (1+fee/100))).toInt()
                             actionReply(action, "" +
                                     "계좌잔고 : $won\n" +
                                     "주식잔고 : ${stocks}주\n" +
-                                    "총 자산 : 잔고 + 주식 * 시세")
+                                    "현재시세 : ${moneyConvert(price.toFloat())}\n" +
+                                    "총 자산 : ${moneyConvert(asset)}\n" +
+                                    "최대 ${max}주 매수 가능")
                         }
 
                         if (contents.contains(" : /info") && gameMode) {
                             stockAPI()
                             actionReply(action, "" +
-                                    "주식시세 : $price\n" +
-                                    "수수료 : 0.015%\n" +
-                                    "세금 : 0.3%\n" +
-                                    "이자 : 없음\n" +
+                                    "주당시세 : ${moneyConvert(price.toFloat())}\n" +
+                                    "수수료 : ${fee}%\n" +
+                                    "세금 : ${tax}% (매도시 적용)\n" +
+                                    "금리 : ${interest}% (미적용)\n" +
                                     "명령 : /buy, /sell, /balance, /quit")
                         }
 
                         if (contents.contains(" : /buy") && gameMode) {
                             stockAPI()
-                            var q = contents.substringAfter(" : /buy ")
-                            actionReply(action, "준비중")
+                            var q = contents.substringAfter(" : /buy ").toIntOrNull()
+                            if (q == null || price == 0) {
+                                actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
+                            } else {
+                                var paid = price * q * (1+fee/100) //수수료만 지불
+                                balance -= paid
+                                stocks += q
+                                actionReply(action, "${q}주를 매수합니다.\n(${moneyConvert(paid)} 지불)")
+                            }
                         }
 
                         if (contents.contains(" : /sell") && gameMode) {
                             stockAPI()
-                            var q = contents.substringAfter(" : /sell ")
-                            actionReply(action, "준비중")
+                            var q = contents.substringAfter(" : /sell ").toIntOrNull()
+                            if (q == null || price == 0) {
+                                actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
+                            } else {
+                                var paid = price * q * (1-fee/100-tax/100)
+                                balance += paid //수수료+세금 지불
+                                stocks -= q
+                                actionReply(action, "${q}주를 매도합니다.\n(${moneyConvert(paid)} 입금)")
+                            }
                         }
 
                         if (contents.contains(" : /quit") && gameMode) {
-                            actionReply(action, "게임이 종료되었습니다.")
+                            actionReply(action, "게임이 종료되면 변수를 초기화하여 처음부터 다시 시작합니다. " +
+                                    "정말로 종료하시겠습니까?\n(종료: /!quit)")
+                        }
+
+                        if (contents.contains(" : /!quit") && gameMode) {
+                            actionReply(action, "게임이 종료되었습니다. 변수를 초기화합니다.")
                             gameMode = false
                             balance = 1000000F
                             stocks = 0
-                            price = ""
+                            price = 0
                         }
 
                         if (contents.contains(" : /quiz") && !quizMode) {
@@ -214,7 +242,7 @@ class NotiListener : NotificationListenerService() {
                             saved = ""
                             balance = 1000000F
                             stocks = 0
-                            price = ""
+                            price = 0
                         }
 
                         if (contents.contains(" : /troll")) {
@@ -279,10 +307,8 @@ class NotiListener : NotificationListenerService() {
                     val areas = result.getJSONArray("areas")
                     val datas = areas.getJSONObject(0).getJSONArray("datas")
                     val nv = datas.getJSONObject(0).getInt("nv")
-                    nv.toString()
-                } else {
-                    "서버오류"
-                }
+                    nv
+                } else { 0 }
             }
         })
     }
