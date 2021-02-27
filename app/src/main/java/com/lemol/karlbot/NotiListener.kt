@@ -4,10 +4,10 @@ import android.app.Notification
 import android.app.Notification.Action
 import android.app.RemoteInput
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import android.widget.Toast
 import okhttp3.*
 import org.json.JSONObject
@@ -21,13 +21,14 @@ class NotiListener : NotificationListenerService() {
     private val client = OkHttpClient()
 
     // 고정
-    private val question = "오락실을 지키는 수호신 용 두 마리는 뭘까요?\n" + "정답은 '/answer'를 입력하세요."
-    private val answer = "정답: 일인용과 이인용"
-    private val tax = 0.3F
-    private val fee = 0.015F
-    private val interest = 0.5F
+    private val tax = 0.3F // percent
+    private val fee = 0.015F // percent
+    private val interest = 0.5F // percent
 
     //변동
+    var question = "오락실을 지키는 수호신 용 두 마리는 뭘까요?\n" + "정답은 '/answer'를 입력하세요."
+    var answer = "정답: 일인용과 이인용"
+    var stockCode = "064850"
     var gameMode = false
     var quizMode = false
     var saved = ""
@@ -52,8 +53,13 @@ class NotiListener : NotificationListenerService() {
         // Contents of the notification in such form: "sender : message"
         val contents = sbn!!.notification.tickerText.toString()
 
+        // Can be useful later
+        // val extras = sbn.notification.extras
+        // val sender = extras.getString(Notification.EXTRA_TITLE)
+        // val text = extras.getCharSequence(Notification.EXTRA_TEXT)
+        // val chatroomName = extras.getCharSequence(Notification.EXTRA_SUB_TEXT) // null if PM
+
         if (sbn.packageName.equals("com.kakao.talk")) {
-            // Log.d("NOTI_LISTENER", "(KakaoTalk) $contents")
 
             // Code below may work on later versions of Android, but doesn't work on 6.0.1
             // This is because direct actions were introduced with Android version 7.0
@@ -89,6 +95,7 @@ class NotiListener : NotificationListenerService() {
                                     "/ddg : DuckDuckGo 검색\n" +
                                     "/save : 데이터 저장\n" +
                                     "/load : 데이터 불러오기\n" +
+                                    "/add : a+b 덧셈 계산\n" +
                                     "/reset : 저장된 변수 리셋\n" +
                                     "/troll : ???"
                             )
@@ -131,7 +138,7 @@ class NotiListener : NotificationListenerService() {
                         if (contents.contains(" : /buy") && gameMode) {
                             stockAPI()
                             var q = contents.substringAfter(" : /buy ").toIntOrNull()
-                            if (q == null || price == 0) {
+                            if (q == null || price == 0 || q > (balance / (price * (1+fee/100))) || q <= 0) {
                                 actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
                             } else {
                                 var paid = price * q * (1+fee/100) //수수료만 지불
@@ -144,7 +151,7 @@ class NotiListener : NotificationListenerService() {
                         if (contents.contains(" : /sell") && gameMode) {
                             stockAPI()
                             var q = contents.substringAfter(" : /sell ").toIntOrNull()
-                            if (q == null || price == 0) {
+                            if (q == null || price == 0 || q > stocks || q <= 0) {
                                 actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
                             } else {
                                 var paid = price * q * (1-fee/100-tax/100)
@@ -261,6 +268,17 @@ class NotiListener : NotificationListenerService() {
                             }
                         }
 
+                        if (contents.contains(" : /add")) {
+                            var q = contents.substringAfter(" : /add ")
+                            var a = q.substringBefore("+").toIntOrNull()
+                            var b = q.substringAfter("+").toIntOrNull()
+                            if (!q.contains("+") || a == null || b == null) {
+                                actionReply(action, "입력인자 오류가 발생했습니다.")
+                            } else {
+                                actionReply(action, "${a+b}")
+                            }
+                        }
+
                         if (contents.contains(" : /reset")) {
                             actionReply(action, "모든 변수가 초기화되었습니다.")
                             gameMode = false
@@ -317,8 +335,7 @@ class NotiListener : NotificationListenerService() {
     }
 
     fun stockAPI () {
-        var url = "https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:064850"
-        var out = ""
+        var url = "https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:$stockCode"
         val request = Request.Builder()
                 .url(url)
                 .build()
@@ -334,7 +351,9 @@ class NotiListener : NotificationListenerService() {
                     val datas = areas.getJSONObject(0).getJSONArray("datas")
                     val nv = datas.getJSONObject(0).getInt("nv")
                     nv
-                } else { 0 }
+                } else {
+                    0
+                }
             }
         })
     }

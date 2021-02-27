@@ -11,14 +11,14 @@ import androidx.core.app.NotificationManagerCompat
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var gameData : SharedPreferences
+    // private lateinit var gameData : SharedPreferences
     private lateinit var checkbtn : Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val editor = gameData.edit() // for later use
+        // val editor = gameData.edit() // for later use
         checkbtn = findViewById(R.id.check_button)
 
         checkbtn.setOnClickListener {
@@ -36,8 +36,4 @@ class MainActivity : AppCompatActivity() {
         val sets = NotificationManagerCompat.getEnabledListenerPackages(this)
         return sets != null && sets.contains(packageName)
     }
-
-
-
-
 }

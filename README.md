@@ -21,6 +21,7 @@ https://play.google.com/store/apps/details?id=com.google.android.wearable.app
 /ddg : DuckDuckGo 검색\
 /save : 데이터 저장\
 /load : 데이터 불러오기\
+/add : a+b 덧셈 계산\
 /reset : 저장된 변수 리셋\
 /troll : ???
 
