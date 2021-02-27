@@ -1,6 +1,7 @@
 package com.lemol.karlbot
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.widget.Button
 import android.widget.Toast
@@ -10,12 +11,14 @@ import androidx.core.app.NotificationManagerCompat
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var checkbtn: Button
+    private lateinit var gameData : SharedPreferences
+    private lateinit var checkbtn : Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        val editor = gameData.edit() // for later use
         checkbtn = findViewById(R.id.check_button)
 
         checkbtn.setOnClickListener {

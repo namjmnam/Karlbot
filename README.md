@@ -16,6 +16,8 @@ https://play.google.com/store/apps/details?id=com.google.android.wearable.app
 /quiz : 준비중\
 /dice : 랜덤 주사위\
 /naver : 네이버 검색\
+/gg : 구글 검색\
+/yt : 유투브 검색\
 /ddg : DuckDuckGo 검색\
 /save : 데이터 저장\
 /load : 데이터 불러오기\

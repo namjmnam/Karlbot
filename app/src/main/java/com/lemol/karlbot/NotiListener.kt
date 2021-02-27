@@ -21,11 +21,11 @@ class NotiListener : NotificationListenerService() {
     private val client = OkHttpClient()
 
     // 고정
-    val question = "오락실을 지키는 수호신 용 두 마리는 뭘까요?\n" + "정답은 '/answer'를 입력하세요."
-    val answer = "정답: 일인용과 이인용"
-    val tax = 0.3F
-    val fee = 0.015F
-    val interest = 0.5F
+    private val question = "오락실을 지키는 수호신 용 두 마리는 뭘까요?\n" + "정답은 '/answer'를 입력하세요."
+    private val answer = "정답: 일인용과 이인용"
+    private val tax = 0.3F
+    private val fee = 0.015F
+    private val interest = 0.5F
 
     //변동
     var gameMode = false
@@ -65,9 +65,9 @@ class NotiListener : NotificationListenerService() {
             val noti = Notification.WearableExtender(sbn.notification).actions
 
             // Check for Android API level 24 (Android 7.0) or above
-            if (Build.VERSION.SDK_INT >= 24){
-                var noti = sbn!!.notification.actions
-            }
+            // if (Build.VERSION.SDK_INT >= 24){
+            //     var noti = sbn!!.notification.actions
+            // }
 
             // This loop seeks for possible actions within the notification
             for (action in noti) {
@@ -84,6 +84,8 @@ class NotiListener : NotificationListenerService() {
                                     "/quiz : 준비중\n" +
                                     "/dice : 랜덤 주사위\n" +
                                     "/naver : 네이버 검색\n" +
+                                    "/gg : 구글 검색\n" +
+                                    "/yt : 유투브 검색\n" +
                                     "/ddg : DuckDuckGo 검색\n" +
                                     "/save : 데이터 저장\n" +
                                     "/load : 데이터 불러오기\n" +
@@ -189,6 +191,30 @@ class NotiListener : NotificationListenerService() {
                                 q = java.net.URLEncoder.encode(q, "utf-8")
                                 actionReply(action,
                                         "https://search.naver.com/search.naver?query=$q"
+                                )
+                            }
+                        }
+
+                        if (contents.contains(" : /gg")) {
+                            var q = contents.substringAfter(" : /gg ")
+                            if ( " : /gg" in q) {
+                                actionReply(action, "검색어 패러미터가 없습니다.")
+                            } else {
+                                q = java.net.URLEncoder.encode(q, "utf-8")
+                                actionReply(action,
+                                        "https://www.google.com/search?q=$q"
+                                )
+                            }
+                        }
+
+                        if (contents.contains(" : /yt")) {
+                            var q = contents.substringAfter(" : /yt ")
+                            if ( " : /yt" in q) {
+                                actionReply(action, "검색어 패러미터가 없습니다.")
+                            } else {
+                                q = java.net.URLEncoder.encode(q, "utf-8")
+                                actionReply(action,
+                                        "https://www.youtube.com/results?search_query=$q"
                                 )
                             }
                         }
