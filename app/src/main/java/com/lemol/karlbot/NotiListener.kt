@@ -54,10 +54,12 @@ class NotiListener : NotificationListenerService() {
         val contents = sbn!!.notification.tickerText.toString()
 
         // Can be useful later
-        // val extras = sbn.notification.extras
+        val extras = sbn.notification.extras
         // val sender = extras.getString(Notification.EXTRA_TITLE)
-        // val text = extras.getCharSequence(Notification.EXTRA_TEXT)
+        val text = extras.getCharSequence(Notification.EXTRA_TEXT)
         // val chatroomName = extras.getCharSequence(Notification.EXTRA_SUB_TEXT) // null if PM
+        val commArgv = text?.split(" ")
+        val comm = commArgv?.get(0)
 
         if (sbn.packageName.equals("com.kakao.talk")) {
 
@@ -80,228 +82,250 @@ class NotiListener : NotificationListenerService() {
                 if (action.remoteInputs != null && action.remoteInputs.isNotEmpty()) {
                     if (action.title.toString().toLowerCase().contains("reply") ||
                             action.title.toString().toLowerCase().contains("답장")) {
-
-                        if (contents.contains(" : /start")) {
-                            actionReply(action, "" +
-                                    "등록된 명령어:\n" +
-                                    "/start : 이 메시지 출력\n" +
-                                    "/say : 말시키기\n" +
-                                    "/game : 가상주식 게임\n" +
-                                    "/quiz : 준비중\n" +
-                                    "/dice : 랜덤 주사위\n" +
-                                    "/naver : 네이버 검색\n" +
-                                    "/gg : 구글 검색\n" +
-                                    "/yt : 유투브 검색\n" +
-                                    "/ddg : DuckDuckGo 검색\n" +
-                                    "/save : 데이터 저장\n" +
-                                    "/load : 데이터 불러오기\n" +
-                                    "/add : a+b 덧셈 계산\n" +
-                                    "/reset : 저장된 변수 리셋\n" +
-                                    "/troll : ???"
-                            )
-                        }
-
-                        if (contents.contains(" : /game") && !gameMode) {
-                            stockAPI()
-                            actionReply(action, "" +
-                                    "초기자금 100만원으로 가상주식 게임을 시작합니다.\n" +
-                                    "매매 : /buy, /sell\n" +
-                                    "잔고 : /balance\n" +
-                                    "시세 : /info\n" +
-                                    "종료 : /quit")
-                            gameMode = true
-                        }
-
-                        if (contents.contains(" : /balance") && gameMode) {
-                            stockAPI()
-                            var asset = balance + stocks * price
-                            var won = moneyConvert(balance)
-                            var max = (balance / (price * (1+fee/100))).toInt()
-                            actionReply(action, "" +
-                                    "계좌잔고 : $won\n" +
-                                    "주식잔고 : ${stocks}주\n" +
-                                    "현재시세 : ${moneyConvert(price.toFloat())}\n" +
-                                    "총 자산 : ${moneyConvert(asset)}\n" +
-                                    "최대 ${max}주 매수 가능")
-                        }
-
-                        if (contents.contains(" : /info") && gameMode) {
-                            stockAPI()
-                            actionReply(action, "" +
-                                    "주당시세 : ${moneyConvert(price.toFloat())}\n" +
-                                    "수수료 : ${fee}%\n" +
-                                    "세금 : ${tax}% (매도시 적용)\n" +
-                                    "금리 : ${interest}% (미적용)\n" +
-                                    "명령 : /buy, /sell, /balance, /quit")
-                        }
-
-                        if (contents.contains(" : /buy") && gameMode) {
-                            stockAPI()
-                            var q = contents.substringAfter(" : /buy ").toIntOrNull()
-                            if (q == null || price == 0 || q > (balance / (price * (1+fee/100))) || q <= 0) {
-                                actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
-                            } else {
-                                var paid = price * q * (1+fee/100) //수수료만 지불
-                                balance -= paid
-                                stocks += q
-                                actionReply(action, "${q}주를 매수합니다.\n(${moneyConvert(paid)} 지불)")
+                                // simplified indentation
+                        when (comm) {
+                            "/start" -> {
+                                actionReply(action, "" +
+                                        "등록된 명령어:\n" +
+                                        "/start : 이 메시지 출력\n" +
+                                        "/say : 말시키기\n" +
+                                        "/game : 가상주식 게임\n" +
+                                        "/quiz : 준비중\n" +
+                                        "/dice : 랜덤 주사위\n" +
+                                        "/naver : 네이버 검색\n" +
+                                        "/gg : 구글 검색\n" +
+                                        "/yt : 유투브 검색\n" +
+                                        "/ddg : DuckDuckGo 검색\n" +
+                                        "/save : 데이터 저장\n" +
+                                        "/load : 데이터 불러오기\n" +
+                                        "/add : a+b 덧셈 계산\n" +
+                                        "/reset : 저장된 변수 리셋\n" +
+                                        "/troll : ???"
+                                )
                             }
-                        }
 
-                        if (contents.contains(" : /sell") && gameMode) {
-                            stockAPI()
-                            var q = contents.substringAfter(" : /sell ").toIntOrNull()
-                            if (q == null || price == 0 || q > stocks || q <= 0) {
-                                actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
-                            } else {
-                                var paid = price * q * (1-fee/100-tax/100)
-                                balance += paid //수수료+세금 지불
-                                stocks -= q
-                                actionReply(action, "${q}주를 매도합니다.\n(${moneyConvert(paid)} 입금)")
-                            }
-                        }
-
-                        if (contents.contains(" : /quit") && gameMode) {
-                            actionReply(action, "게임이 종료되면 변수를 초기화하여 처음부터 다시 시작합니다. " +
-                                    "정말로 종료하시겠습니까?\n(종료: /!quit)")
-                        }
-
-                        if (contents.contains(" : /!quit") && gameMode) {
-                            actionReply(action, "게임이 종료되었습니다. 변수를 초기화합니다.")
-                            gameMode = false
-                            balance = 1000000F
-                            stocks = 0
-                            price = 0
-                        }
-
-                        if (contents.contains(" : /quiz") && !quizMode) {
-                            actionReply(action, question)
-                            quizMode = true
-                        }
-
-                        if (contents.contains(" : /answer") && quizMode) {
-                            actionReply(action, answer)
-                            gameMode = false
-                        }
-
-                        if (contents.contains(" : /dice")) {
-                            val dice = Math.random() * 6 + 1
-                            actionReply(action, "주사위를 굴려 " + dice.toString()[0] +
-                                    "이(가) 나왔습니다.")
-                        }
-
-                        if (contents.contains(" : /naver")) {
-                            var q = contents.substringAfter(" : /naver ")
-                            if ( " : /naver" in q) {
-                                actionReply(action, "검색어 패러미터가 없습니다.")
+                            "/game" -> {
+                                if (!gameMode) {
+                                    stockAPI()
+                                    actionReply(action, "" +
+                                            "초기자금 100만원으로 가상주식 게임을 시작합니다.\n" +
+                                            "매매 : /buy, /sell\n" +
+                                            "잔고 : /balance\n" +
+                                            "시세 : /info\n" +
+                                            "종료 : /quit")
+                                    gameMode = true
                                 } else {
-                                q = java.net.URLEncoder.encode(q, "utf-8")
-                                actionReply(action,
-                                        "https://search.naver.com/search.naver?query=$q"
-                                )
+                                    actionReply(action, "이미 게임이 실행중입니다.")
+                                }
                             }
-                        }
 
-                        if (contents.contains(" : /gg")) {
-                            var q = contents.substringAfter(" : /gg ")
-                            if ( " : /gg" in q) {
-                                actionReply(action, "검색어 패러미터가 없습니다.")
-                            } else {
-                                q = java.net.URLEncoder.encode(q, "utf-8")
-                                actionReply(action,
-                                        "https://www.google.com/search?q=$q"
-                                )
+                            "/balance" -> {
+                                if (gameMode) {
+                                    stockAPI()
+                                    var asset = balance + stocks * price
+                                    var won = moneyConvert(balance)
+                                    var max = (balance / (price * (1+fee/100))).toInt()
+                                    actionReply(action, "" +
+                                            "계좌잔고 : $won\n" +
+                                            "주식잔고 : ${stocks}주\n" +
+                                            "현재시세 : ${moneyConvert(price.toFloat())}\n" +
+                                            "총 자산 : ${moneyConvert(asset)}\n" +
+                                            "최대 ${max}주 매수 가능")
+                                }
                             }
-                        }
 
-                        if (contents.contains(" : /yt")) {
-                            var q = contents.substringAfter(" : /yt ")
-                            if ( " : /yt" in q) {
-                                actionReply(action, "검색어 패러미터가 없습니다.")
-                            } else {
-                                q = java.net.URLEncoder.encode(q, "utf-8")
-                                actionReply(action,
-                                        "https://www.youtube.com/results?search_query=$q"
-                                )
+                            "/info" -> {
+                                if (gameMode) {
+                                    stockAPI()
+                                    actionReply(action, "" +
+                                            "주당시세 : ${moneyConvert(price.toFloat())}\n" +
+                                            "수수료 : ${fee}%\n" +
+                                            "세금 : ${tax}% (매도시 적용)\n" +
+                                            "금리 : ${interest}% (미적용)\n" +
+                                            "명령 : /buy, /sell, /balance, /quit")
+                                }
                             }
-                        }
 
-                        if (contents.contains(" : /ddg")) {
-                            var q = contents.substringAfter(" : /ddg ")
-                            if ( " : /ddg" in q) {
-                                actionReply(action, "검색어 패러미터가 없습니다.")
-                            } else {
-                                q = java.net.URLEncoder.encode(q, "utf-8")
-                                actionReply(action,
-                                        "https://duckduckgo.com/?t=ffab&q=$q"
-                                )
+                            "/buy" -> {
+                                if (gameMode){
+                                    stockAPI()
+                                    var q = contents.substringAfter(" : /buy ").toIntOrNull()
+                                    if (q == null || price == 0 || q > (balance / (price * (1+fee/100))) || q <= 0) {
+                                        actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
+                                    } else {
+                                        var paid = price * q * (1+fee/100) //수수료만 지불
+                                        balance -= paid
+                                        stocks += q
+                                        actionReply(action, "${q}주를 매수합니다.\n(${moneyConvert(paid)} 지불)")
+                                    }
+                                }
                             }
-                        }
 
-                        if (contents.contains(" : /save")) {
-                            saved = contents.substringAfter(" : /save ")
-                            if ( " : /save" in saved) {
-                                actionReply(action, "데이터를 저장할 수 없습니다.")
-                            } else {
-                                actionReply(action,
-                                        "'$saved'\n위 데이터를 저장했습니다. 불러오려면 /load를 입력하세요."
-                                )
+                            "/sell" -> {
+                                if (gameMode) {
+                                    stockAPI()
+                                    var q = contents.substringAfter(" : /sell ").toIntOrNull()
+                                    if (q == null || price == 0 || q > stocks || q <= 0) {
+                                        actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
+                                    } else {
+                                        var paid = price * q * (1-fee/100-tax/100)
+                                        balance += paid //수수료+세금 지불
+                                        stocks -= q
+                                        actionReply(action, "${q}주를 매도합니다.\n(${moneyConvert(paid)} 입금)")
+                                    }
+                                }
                             }
-                        }
 
-                        if (contents.contains(" : /load")) {
-                            if (saved == "") {
-                                actionReply(action, "저장된 데이터가 없습니다.")
-                            } else {
-                                actionReply(action,
-                                        "저장된 데이터는 다음과 같습니다:\n$saved"
-                                )
+                            "/quit" -> {
+                                if (gameMode) {
+                                    actionReply(action, "게임이 종료되면 변수를 초기화하여 처음부터 다시 시작합니다. " +
+                                            "정말로 종료하시겠습니까?\n(종료: /!quit)")
+                                }
                             }
-                        }
 
-                        if (contents.contains(" : /say")) {
-                            var q = contents.substringAfter(" : /say ")
-                            if ( " : /say" in q) {
-                                actionReply(action, "패러미터가 없습니다.")
-                            } else {
-                                actionReply(action, q)
+                            "/!quit" -> {
+                                if (gameMode) {
+                                    actionReply(action, "게임이 종료되었습니다. 변수를 초기화합니다.")
+                                    gameMode = false
+                                    balance = 1000000F
+                                    stocks = 0
+                                    price = 0
+                                }
                             }
-                        }
 
-                        if (contents.contains(" : /add")) {
-                            var q = contents.substringAfter(" : /add ")
-                            var a = q.substringBefore("+").toIntOrNull()
-                            var b = q.substringAfter("+").toIntOrNull()
-                            if (!q.contains("+") || a == null || b == null) {
-                                actionReply(action, "입력인자 오류가 발생했습니다.")
-                            } else {
-                                actionReply(action, "${a+b}")
+                            "/quiz" -> {
+                                if (!quizMode) {
+                                    actionReply(action, question)
+                                    quizMode = true
+                                }
                             }
-                        }
 
-                        if (contents.contains(" : /reset")) {
-                            actionReply(action, "모든 변수가 초기화되었습니다.")
-                            gameMode = false
-                            quizMode = false
-                            saved = ""
-                            balance = 1000000F
-                            stocks = 0
-                            price = 0
-                        }
+                            "/answer" -> {
+                                if (quizMode) {
+                                    actionReply(action, answer)
+                                    gameMode = false
+                                }
+                            }
 
-                        if (contents.contains(" : /troll")) {
-                            actionReply(action, "" +
-                                    "....................../´¯/)  \n" +
-                                    "....................,/¯../  \n" +
-                                    ".................../..../  \n" +
-                                    "............./´¯/'...'/´¯¯`·¸  \n" +
-                                    "........../'/.../..../......./¨¯\\  \n" +
-                                    "........('(...´...´.... ¯~/'...')  \n" +
-                                    ".........\\.................'...../  \n" +
-                                    "..........''...\\.......... _.·´  \n" +
-                                    "............\\..............(  \n" +
-                                    "..............\\.............\\...\n" +
-                                    "Fahk you azz hore")
+                            "/dice" -> {
+                                val dice = Math.random() * 6 + 1
+                                actionReply(action, "주사위를 굴려 " + dice.toString()[0] +
+                                        "이(가) 나왔습니다.")
+                            }
+
+                            "/naver" -> {
+                                var q = contents.substringAfter(" : /naver ")
+                                if ( " : /naver" in q) {
+                                    actionReply(action, "검색어 패러미터가 없습니다.")
+                                } else {
+                                    q = java.net.URLEncoder.encode(q, "utf-8")
+                                    actionReply(action,
+                                            "https://search.naver.com/search.naver?query=$q"
+                                    )
+                                }
+                            }
+
+                            "/gg" -> {
+                                var q = contents.substringAfter(" : /gg ")
+                                if ( " : /gg" in q) {
+                                    actionReply(action, "검색어 패러미터가 없습니다.")
+                                } else {
+                                    q = java.net.URLEncoder.encode(q, "utf-8")
+                                    actionReply(action,
+                                            "https://www.google.com/search?q=$q"
+                                    )
+                                }
+                            }
+
+                            "/yt" -> {
+                                var q = contents.substringAfter(" : /yt ")
+                                if ( " : /yt" in q) {
+                                    actionReply(action, "검색어 패러미터가 없습니다.")
+                                } else {
+                                    q = java.net.URLEncoder.encode(q, "utf-8")
+                                    actionReply(action,
+                                            "https://www.youtube.com/results?search_query=$q"
+                                    )
+                                }
+                            }
+
+                            "/ddg" -> {
+                                var q = contents.substringAfter(" : /ddg ")
+                                if ( " : /ddg" in q) {
+                                    actionReply(action, "검색어 패러미터가 없습니다.")
+                                } else {
+                                    q = java.net.URLEncoder.encode(q, "utf-8")
+                                    actionReply(action,
+                                            "https://duckduckgo.com/?t=ffab&q=$q"
+                                    )
+                                }
+                            }
+
+                            "/save" -> {
+                                saved = contents.substringAfter(" : /save ")
+                                if ( " : /save" in saved) {
+                                    actionReply(action, "데이터를 저장할 수 없습니다.")
+                                } else {
+                                    actionReply(action,
+                                            "'$saved'\n위 데이터를 저장했습니다. 불러오려면 /load를 입력하세요."
+                                    )
+                                }
+                            }
+
+                            "/load" -> {
+                                if (saved == "") {
+                                    actionReply(action, "저장된 데이터가 없습니다.")
+                                } else {
+                                    actionReply(action,
+                                            "저장된 데이터는 다음과 같습니다:\n$saved"
+                                    )
+                                }
+                            }
+
+                            "/say" -> {
+                                var q = contents.substringAfter(" : /say ")
+                                if ( " : /say" in q) {
+                                    actionReply(action, "패러미터가 없습니다.")
+                                } else {
+                                    actionReply(action, q)
+                                }
+                            }
+
+                            "/add" -> {
+                                var q = contents.substringAfter(" : /add ")
+                                var a = q.substringBefore("+").toIntOrNull()
+                                var b = q.substringAfter("+").toIntOrNull()
+                                if (!q.contains("+") || a == null || b == null) {
+                                    actionReply(action, "입력인자 오류가 발생했습니다.")
+                                } else {
+                                    actionReply(action, "${a+b}")
+                                }
+                            }
+
+                            "/reset" -> {
+                                actionReply(action, "모든 변수가 초기화되었습니다.")
+                                gameMode = false
+                                quizMode = false
+                                saved = ""
+                                balance = 1000000F
+                                stocks = 0
+                                price = 0
+                            }
+
+                            "/troll" -> {
+                                actionReply(action, "" +
+                                        "....................../´¯/)  \n" +
+                                        "....................,/¯../  \n" +
+                                        ".................../..../  \n" +
+                                        "............./´¯/'...'/´¯¯`·¸  \n" +
+                                        "........../'/.../..../......./¨¯\\  \n" +
+                                        "........('(...´...´.... ¯~/'...')  \n" +
+                                        ".........\\.................'...../  \n" +
+                                        "..........''...\\.......... _.·´  \n" +
+                                        "............\\..............(  \n" +
+                                        "..............\\.............\\...\n" +
+                                        "Fahk you azz hore")
+                            }
                         }
                     }
                 }
@@ -329,12 +353,12 @@ class NotiListener : NotificationListenerService() {
 
     }
 
-    fun moneyConvert(money: Float): String {
+    private fun moneyConvert(money: Float): String {
         var format: NumberFormat = NumberFormat.getCurrencyInstance(Locale.KOREA)
         return format.format(money)
     }
 
-    fun stockAPI () {
+    private fun stockAPI () {
         var url = "https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:$stockCode"
         val request = Request.Builder()
                 .url(url)
