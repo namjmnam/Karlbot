@@ -2,13 +2,11 @@ package com.lemol.karlbot
 
 import android.app.Notification
 import android.app.Notification.Action
-import android.app.NotificationManager
 import android.app.RemoteInput
 import android.content.Intent
 import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.util.Log
 import android.widget.Toast
 import okhttp3.*
 import org.json.JSONObject
@@ -19,6 +17,10 @@ import java.util.*
 
 class NotiListener : NotificationListenerService() {
 
+    // Issues
+    // Need to differentiate users
+    // Need to save data
+
     private val client = OkHttpClient()
 
     // 고정
@@ -27,15 +29,22 @@ class NotiListener : NotificationListenerService() {
     private val interest = 0.5F // percent
 
     //변동
-    var question = "오락실을 지키는 수호신 용 두 마리는 뭘까요?\n" + "정답은 '/answer'를 입력하세요."
-    var answer = "정답: 일인용과 이인용"
-    var stockCode = "064850"
-    var gameMode = false
-    var quizMode = false
-    var saved = ""
-    var balance = 1000000F
-    var stocks = 0
-    var price = 0
+    private var question = "오락실을 지키는 수호신 용 두 마리는?"
+    private var answer = "일인용과 이인용"
+    private var stockCode = "064850"
+    private var quizMode = false
+    private var saved = ""
+    private var balance = 1000000F
+    private var stocks = 0
+    private var price = 0
+    private var personalData : MutableMap<String, List<Number>> = mutableMapOf()
+    // {chatRoomName=[balance(Float), stocks(Int), gameMode(Int)]}
+    // gameMode is on if it's 1, it's off if it's 0 or null
+    private var stocksData : MutableMap<String, List<Number>> = mutableMapOf()
+//    var questionMap = mutableListOf(
+//            mutableListOf("오락실을 지키는 수호신 용 두 마리는?", "일인용과 이인용"),
+//            mutableListOf("귀가 불에 타면?", "타이어")
+//    )
 
     override fun onCreate() {
         super.onCreate()
@@ -56,14 +65,15 @@ class NotiListener : NotificationListenerService() {
 
         // Can be useful later
         val extras = sbn.notification.extras
-        // val sender = extras.getString(Notification.EXTRA_TITLE)
-        val text = extras.getCharSequence(Notification.EXTRA_TEXT)
-        // val chatroomName = extras.getCharSequence(Notification.EXTRA_SUB_TEXT) // null if PM
-        val commArgv = text?.split(" ")
-        val comm = commArgv?.get(0)
+        val sender = extras.getString(Notification.EXTRA_TITLE)
+        val text = extras.getCharSequence(Notification.EXTRA_TEXT).toString()
+        val chatRoomName = extras.getCharSequence(Notification.EXTRA_SUB_TEXT) // null if PM
+        val commArgv = text.split(" ")
+        val comm = commArgv[0]
 
         // Log.d("NOTI_LISTENER", sbn.packageName + Notification.WearableExtender(sbn.notification).actions.toString())
         // Log.d("NOTI_LISTENER", activeNotifications.toString())
+        // Log.d("NOTI_LISTENER", extras.toString())
 
         if (sbn.packageName.equals("com.kakao.talk")) {
 
@@ -93,7 +103,7 @@ class NotiListener : NotificationListenerService() {
                                     "/start : 이 메시지 출력\n" +
                                     "/say : 말시키기\n" +
                                     "/game : 가상주식 게임\n" +
-                                    "/quiz : 준비중\n" +
+                                    "/quiz : (준비중)\n" +
                                     "/dice : 랜덤 주사위\n" +
                                     "/naver : 네이버 검색\n" +
                                     "/gg : 구글 검색\n" +
@@ -101,46 +111,53 @@ class NotiListener : NotificationListenerService() {
                                     "/ddg : DuckDuckGo 검색\n" +
                                     "/save : 데이터 저장\n" +
                                     "/load : 데이터 불러오기\n" +
-                                    "/add : a+b 덧셈 계산\n" +
+                                    "/add : a+b 덧셈 계산(beta)\n" +
+                                    "/data : (준비중)\n" +
                                     "/reset : 저장된 변수 리셋\n" +
                                     "/troll : ???")
                         }
 
                         "/game" -> {
-                            if (!gameMode) {
+                            // used to be !gameMode
+                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 0) {
                                 stockAPI()
+                                stocksData[chatRoomName.toString()] = listOf(1000000F, 0, 1)
                                 actionReply(action, "" +
                                         "초기자금 100만원으로 가상주식 게임을 시작합니다.\n" +
                                         "매매 : /buy, /sell\n" +
                                         "잔고 : /balance\n" +
                                         "시세 : /info\n" +
                                         "종료 : /quit")
-                                gameMode = true
                             } else {
                                 actionReply(action, "이미 게임이 실행중입니다.")
                             }
                         }
 
                         "/balance" -> {
-                            if (gameMode) {
+                            // used to be gameMode
+                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
                                 stockAPI()
-                                var asset = balance + stocks * price
-                                var won = moneyConvert(balance)
-                                var max = (balance / (price * (1 + fee / 100))).toInt()
+                                balance = stocksData[chatRoomName.toString()]?.get(0) as Float
+                                stocks = stocksData[chatRoomName.toString()]?.get(1) as Int
+                                val asset = balance + stocks * price
+                                val won = moneyConvert(balance)
+                                val max = (balance / (price * (1 + fee / 100))).toInt()
+                                val sise = if (price == 0) { "네트워크 오류" } else { moneyConvert(price.toFloat()) }
                                 actionReply(action, "" +
                                         "계좌잔고 : $won\n" +
                                         "주식잔고 : ${stocks}주\n" +
-                                        "현재시세 : ${moneyConvert(price.toFloat())}\n" +
+                                        "주당시가 : ${sise}\n" +
                                         "총 자산 : ${moneyConvert(asset)}\n" +
                                         "최대 ${max}주 매수 가능")
                             }
                         }
 
                         "/info" -> {
-                            if (gameMode) {
+                            // used to be gameMode
+                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
                                 stockAPI()
                                 actionReply(action, "" +
-                                        "주당시세 : ${moneyConvert(price.toFloat())}\n" +
+                                        "주당시가 : ${moneyConvert(price.toFloat())}\n" +
                                         "수수료 : ${fee}%\n" +
                                         "세금 : ${tax}% (매도시 적용)\n" +
                                         "금리 : ${interest}% (미적용)\n" +
@@ -149,46 +166,56 @@ class NotiListener : NotificationListenerService() {
                         }
 
                         "/buy" -> {
-                            if (gameMode) {
+                            // used to be gameMode
+                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
                                 stockAPI()
-                                var q = contents.substringAfter(" : /buy ").toIntOrNull()
-                                if (q == null || price == 0 || q > (balance / (price * (1 + fee / 100))) || q <= 0) {
+                                balance = stocksData[chatRoomName.toString()]?.get(0) as Float
+                                stocks = stocksData[chatRoomName.toString()]?.get(1) as Int
+                                val amount = commArgv.getOrNull(1)?.toIntOrNull()
+                                if (amount == null || price == 0 || amount > (balance / (price * (1 + fee / 100))) || amount <= 0) {
                                     actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
                                 } else {
-                                    var paid = price * q * (1 + fee / 100) //수수료만 지불
+                                    val paid = price * amount * (1 + fee / 100) //수수료만 지불
                                     balance -= paid
-                                    stocks += q
-                                    actionReply(action, "${q}주를 매수합니다.\n(${moneyConvert(paid)} 지불)")
+                                    stocks += amount
+                                    actionReply(action, "${amount}주를 매수합니다.\n(${moneyConvert(paid)} 지불)")
+                                    stocksData[chatRoomName.toString()] = listOf(balance, stocks, 1)
                                 }
                             }
                         }
 
                         "/sell" -> {
-                            if (gameMode) {
+                            // used to be gameMode
+                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
                                 stockAPI()
-                                var q = contents.substringAfter(" : /sell ").toIntOrNull()
-                                if (q == null || price == 0 || q > stocks || q <= 0) {
+                                balance = stocksData[chatRoomName.toString()]?.get(0) as Float
+                                stocks = stocksData[chatRoomName.toString()]?.get(1) as Int
+                                val amount = commArgv.getOrNull(1)?.toIntOrNull()
+                                if (amount == null || price == 0 || amount > stocks || amount <= 0) {
                                     actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
                                 } else {
-                                    var paid = price * q * (1 - fee / 100 - tax / 100)
+                                    val paid = price * amount * (1 - fee / 100 - tax / 100)
                                     balance += paid //수수료+세금 지불
-                                    stocks -= q
-                                    actionReply(action, "${q}주를 매도합니다.\n(${moneyConvert(paid)} 입금)")
+                                    stocks -= amount
+                                    actionReply(action, "${amount}주를 매도합니다.\n(${moneyConvert(paid)} 입금)")
+                                    stocksData[chatRoomName.toString()] = listOf(balance, stocks, 1)
                                 }
                             }
                         }
 
                         "/quit" -> {
-                            if (gameMode) {
+                            // used to be gameMode
+                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
                                 actionReply(action, "게임이 종료되면 변수를 초기화하여 처음부터 다시 시작합니다. " +
                                         "정말로 종료하시겠습니까?\n(종료: /!quit)")
                             }
                         }
 
                         "/!quit" -> {
-                            if (gameMode) {
+                            // used to be gameMode
+                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
                                 actionReply(action, "게임이 종료되었습니다. 변수를 초기화합니다.")
-                                gameMode = false
+                                stocksData.remove(chatRoomName.toString())
                                 balance = 1000000F
                                 stocks = 0
                                 price = 0
@@ -197,15 +224,15 @@ class NotiListener : NotificationListenerService() {
 
                         "/quiz" -> {
                             if (!quizMode) {
-                                actionReply(action, question)
+                                actionReply(action, "$question\n정답은 '/answer'를 입력하세요.")
                                 quizMode = true
                             }
                         }
 
                         "/answer" -> {
                             if (quizMode) {
-                                actionReply(action, answer)
-                                gameMode = false
+                                actionReply(action, "정답: $answer")
+                                quizMode = false
                             }
                         }
 
@@ -216,8 +243,8 @@ class NotiListener : NotificationListenerService() {
                         }
 
                         "/naver" -> {
-                            var q = contents.substringAfter(" : /naver ")
-                            if (" : /naver" in q) {
+                            var q = text.substringAfter("/naver ")
+                            if (commArgv.getOrNull(1).isNullOrBlank()) {
                                 actionReply(action, "검색어 패러미터가 없습니다.")
                             } else {
                                 q = java.net.URLEncoder.encode(q, "utf-8")
@@ -228,8 +255,8 @@ class NotiListener : NotificationListenerService() {
                         }
 
                         "/gg" -> {
-                            var q = contents.substringAfter(" : /gg ")
-                            if (" : /gg" in q) {
+                            var q = text.substringAfter("/gg ")
+                            if (commArgv.getOrNull(1).isNullOrBlank()) {
                                 actionReply(action, "검색어 패러미터가 없습니다.")
                             } else {
                                 q = java.net.URLEncoder.encode(q, "utf-8")
@@ -240,8 +267,8 @@ class NotiListener : NotificationListenerService() {
                         }
 
                         "/yt" -> {
-                            var q = contents.substringAfter(" : /yt ")
-                            if (" : /yt" in q) {
+                            var q = text.substringAfter("/yt ")
+                            if (commArgv.getOrNull(1).isNullOrBlank()) {
                                 actionReply(action, "검색어 패러미터가 없습니다.")
                             } else {
                                 q = java.net.URLEncoder.encode(q, "utf-8")
@@ -252,8 +279,8 @@ class NotiListener : NotificationListenerService() {
                         }
 
                         "/ddg" -> {
-                            var q = contents.substringAfter(" : /ddg ")
-                            if (" : /ddg" in q) {
+                            var q = text.substringAfter("/ddg ")
+                            if (commArgv.getOrNull(1).isNullOrBlank()) {
                                 actionReply(action, "검색어 패러미터가 없습니다.")
                             } else {
                                 q = java.net.URLEncoder.encode(q, "utf-8")
@@ -264,8 +291,8 @@ class NotiListener : NotificationListenerService() {
                         }
 
                         "/save" -> {
-                            saved = contents.substringAfter(" : /save ")
-                            if (" : /save" in saved) {
+                            saved = text.substringAfter("/save ")
+                            if (commArgv.getOrNull(1).isNullOrBlank()) {
                                 actionReply(action, "데이터를 저장할 수 없습니다.")
                             } else {
                                 actionReply(action,
@@ -285,8 +312,8 @@ class NotiListener : NotificationListenerService() {
                         }
 
                         "/say" -> {
-                            var q = contents.substringAfter(" : /say ")
-                            if (" : /say" in q) {
+                            val q = text.substringAfter("/say ")
+                            if (commArgv.getOrNull(1).isNullOrBlank()) {
                                 actionReply(action, "패러미터가 없습니다.")
                             } else {
                                 actionReply(action, q)
@@ -294,9 +321,9 @@ class NotiListener : NotificationListenerService() {
                         }
 
                         "/add" -> {
-                            var q = contents.substringAfter(" : /add ")
-                            var a = q.substringBefore("+").toIntOrNull()
-                            var b = q.substringAfter("+").toIntOrNull()
+                            val q = text.substringAfter("/add ")
+                            val a = q.substringBefore("+").toIntOrNull()
+                            val b = q.substringAfter("+").toIntOrNull()
                             if (!q.contains("+") || a == null || b == null) {
                                 actionReply(action, "입력인자 오류가 발생했습니다.")
                             } else {
@@ -304,9 +331,15 @@ class NotiListener : NotificationListenerService() {
                             }
                         }
 
+                        "/data" -> {
+                            var q = text.substringAfter("/data ")
+                            //actionReply(action, "${personalData[sender]?.get(0)?.toString()}")
+                            actionReply(action, "$stocksData")
+                            //actionReply(action, "$personalData")
+                        }
+
                         "/reset" -> {
                             actionReply(action, "모든 변수가 초기화되었습니다.")
-                            gameMode = false
                             quizMode = false
                             saved = ""
                             balance = 1000000F
@@ -355,26 +388,28 @@ class NotiListener : NotificationListenerService() {
     }
 
     private fun moneyConvert(money: Float): String {
-        var format: NumberFormat = NumberFormat.getCurrencyInstance(Locale.KOREA)
+        val format: NumberFormat = NumberFormat.getCurrencyInstance(Locale.KOREA)
         return format.format(money)
     }
 
     private fun stockAPI () {
-        var url = "https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:$stockCode"
+        val url = "https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:$stockCode"
         val request = Request.Builder()
                 .url(url)
                 .build()
 
         client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {}
+            override fun onFailure(call: Call, e: IOException) {
+                price = 0
+            }
             override fun onResponse(call: Call, response: Response) {
                 price = if (response.isSuccessful) {
-                    val jsonData = response.body?.string().toString()
-                    val Jobject = JSONObject(jsonData)
-                    val result = Jobject.getJSONObject("result")
+                    val jsonDataF = response.body?.string().toString()
+                    val jsonObjectF = JSONObject(jsonDataF)
+                    val result = jsonObjectF.getJSONObject("result")
                     val areas = result.getJSONArray("areas")
-                    val datas = areas.getJSONObject(0).getJSONArray("datas")
-                    val nv = datas.getJSONObject(0).getInt("nv")
+                    val dataF = areas.getJSONObject(0).getJSONArray("datas")
+                    val nv = dataF.getJSONObject(0).getInt("nv")
                     nv
                 } else {
                     0

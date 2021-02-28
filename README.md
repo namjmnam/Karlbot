@@ -13,7 +13,7 @@ https://play.google.com/store/apps/details?id=com.google.android.wearable.app
 /start : 이 메시지 출력\
 /say : 말시키기\
 /game : 가상주식 게임\
-/quiz : 준비중\
+/quiz : (준비중)\
 /dice : 랜덤 주사위\
 /naver : 네이버 검색\
 /gg : 구글 검색\
@@ -21,7 +21,7 @@ https://play.google.com/store/apps/details?id=com.google.android.wearable.app
 /ddg : DuckDuckGo 검색\
 /save : 데이터 저장\
 /load : 데이터 불러오기\
-/add : a+b 덧셈 계산\
+/data : (준비중)\
+/add : a+b 덧셈 계산(beta)\
 /reset : 저장된 변수 리셋\
 /troll : ???
-
