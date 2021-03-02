@@ -14,6 +14,7 @@ https://play.google.com/store/apps/details?id=com.google.android.wearable.app
 /say : 말시키기\
 /game : 가상주식 게임\
 /quiz : (준비중)\
+/psycho : 성격유형 검사\
 /dice : 랜덤 주사위\
 /naver : 네이버 검색\
 /gg : 구글 검색\
