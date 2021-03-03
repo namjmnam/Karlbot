@@ -30,6 +30,8 @@ class NotiListener : NotificationListenerService() {
     private val interest = 0.5F // percent
 
     //변동
+    private var savedNoti : Action? = null
+    private var linkMode = false
     private var question = "오락실을 지키는 수호신 용 두 마리는?"
     private var answer = "일인용과 이인용"
     private var stockCode = "064850"
@@ -113,8 +115,9 @@ class NotiListener : NotificationListenerService() {
                                     "/ddg : DuckDuckGo 검색\n" +
                                     "/save : 데이터 저장\n" +
                                     "/load : 데이터 불러오기\n" +
-                                    "/add : a+b 덧셈 계산(beta)\n" +
+                                    "/calc : (beta)사칙연산(+,-,*,/)\n" +
                                     "/data : (준비중)\n" +
+                                    "/link : 외부 채팅방과 연동\n" +
                                     "/reset : 저장된 변수 리셋\n" +
                                     "/troll : ???")
                         }
@@ -401,14 +404,47 @@ class NotiListener : NotificationListenerService() {
                             }
                         }
 
-                        "/add" -> {
-                            val q = text.substringAfter("/add ")
-                            val a = q.substringBefore("+").toIntOrNull()
-                            val b = q.substringAfter("+").toIntOrNull()
-                            if (!q.contains("+") || a == null || b == null) {
-                                actionReply(action, "입력인자 오류가 발생했습니다.")
-                            } else {
-                                actionReply(action, "${a + b}")
+                        "/calc" -> {
+                            val expr = text.substringAfter("/calc ")
+                            if (expr.contains("+")) {
+                                val a = expr.substringBefore("+").toIntOrNull()
+                                val b = expr.substringAfter("+").toIntOrNull()
+                                if (a == null || b == null) {
+                                    actionReply(action, "입력인자 오류가 발생했습니다.")
+
+                                } else {
+                                    actionReply(action, "${a + b}")
+                                }
+                            }
+                            if (expr.contains("-")) {
+                                val a = expr.substringBefore("-").toIntOrNull()
+                                val b = expr.substringAfter("-").toIntOrNull()
+                                if (a == null || b == null) {
+                                    actionReply(action, "입력인자 오류가 발생했습니다.")
+
+                                } else {
+                                    actionReply(action, "${a - b}")
+                                }
+                            }
+                            if (expr.contains("*")) {
+                                val a = expr.substringBefore("*").toIntOrNull()
+                                val b = expr.substringAfter("*").toIntOrNull()
+                                if (a == null || b == null) {
+                                    actionReply(action, "입력인자 오류가 발생했습니다.")
+
+                                } else {
+                                    actionReply(action, "${a * b}")
+                                }
+                            }
+                            if (expr.contains("/")) {
+                                val a = expr.substringBefore("/").toIntOrNull()
+                                val b = expr.substringAfter("/").toIntOrNull()
+                                if (a == null || b == null || b == 0) {
+                                    actionReply(action, "입력인자 오류가 발생했습니다.")
+
+                                } else {
+                                    actionReply(action, "${a / b}")
+                                }
                             }
                         }
 
@@ -419,8 +455,35 @@ class NotiListener : NotificationListenerService() {
                             //actionReply(action, "$personalData")
                         }
 
+                        "/link" -> {
+                            savedNoti = action
+                            NotiListener.savedNoti = action
+                            linkMode = true
+                            actionReply(action, "봇이 외부 채팅방과 연동됩니다.\n" +
+                                    "/send 명령어로 현 채팅방에 메시지를 보낼 수 있습니다.\n" +
+                                    "/unlink 명령어로 연동을 해제할 수 있습니다.")
+                        }
+
+                        "/unlink" -> {
+                            savedNoti = null
+                            linkMode = false
+                            actionReply(action, "연동을 해제합니다.")
+                        }
+
+                        "/send" -> {
+                            if (linkMode) {
+                                val q = text.substringAfter("/send ")
+                                savedNoti?.let { actionReply(it, "외부 수신 메시지:\n$q") }
+                            }
+                        }
+
                         "/reset" -> {
                             actionReply(action, "모든 변수가 초기화되었습니다.")
+                            // needs more things here
+                            savedNoti = null
+                            NotiListener.savedNoti = null
+                            linkMode = false
+                            stocksData = mutableMapOf()
                             quizMode = false
                             saved = ""
                             balance = 1000000F
@@ -462,6 +525,11 @@ class NotiListener : NotificationListenerService() {
         for (input in action.remoteInputs) bundle.putCharSequence(input.resultKey, msg)
         RemoteInput.addResultsToIntent(action.remoteInputs, intent, bundle)
         action.actionIntent.send(this, 0, intent)
+    }
+
+    companion object {
+        // Just to make it easier for other activities to access it
+        var savedNoti : Action? = null
     }
 
     fun genQuiz() {

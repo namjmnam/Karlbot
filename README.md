@@ -22,7 +22,8 @@ https://play.google.com/store/apps/details?id=com.google.android.wearable.app
 /ddg : DuckDuckGo 검색\
 /save : 데이터 저장\
 /load : 데이터 불러오기\
+/calc : (beta)사칙연산(+,-,*,/)\
 /data : (준비중)\
-/add : a+b 덧셈 계산(beta)\
+/link : 외부 채팅방과 연동\
 /reset : 저장된 변수 리셋\
 /troll : ???
