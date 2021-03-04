@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.Notification.Action
 import android.app.RemoteInput
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -13,6 +14,7 @@ import okhttp3.*
 import org.json.JSONObject
 import java.io.IOException
 import java.text.NumberFormat
+import java.time.LocalDateTime
 import java.util.*
 
 
@@ -32,15 +34,18 @@ class NotiListener : NotificationListenerService() {
     //변동
     private var savedNoti : Action? = null
     private var linkMode = false
+
     private var question = "오락실을 지키는 수호신 용 두 마리는?"
     private var answer = "일인용과 이인용"
-    private var stockCode = "064850"
     private var quizMode = false
+
     private var saved = ""
+    private var personalData : MutableMap<String, List<Number>> = mutableMapOf()
+
+    private var stockCode = "064850"
     private var balance = 1000000F
     private var stocks = 0
     private var price = 0
-    private var personalData : MutableMap<String, List<Number>> = mutableMapOf()
     // {chatRoomName=[balance(Float), stocks(Int), gameMode(Int)]}
     // gameMode is on if it's 1, it's off if it's 0 or null
     private var stocksData : MutableMap<String, List<Number>> = mutableMapOf()
@@ -48,6 +53,9 @@ class NotiListener : NotificationListenerService() {
 //            mutableListOf("오락실을 지키는 수호신 용 두 마리는?", "일인용과 이인용"),
 //            mutableListOf("귀가 불에 타면?", "타이어")
 //    )
+
+    private var milGame = false
+    private var tttGame = false
 
     override fun onCreate() {
         super.onCreate()
@@ -99,413 +107,531 @@ class NotiListener : NotificationListenerService() {
                 if (!action.remoteInputs.isNullOrEmpty() &&
                         (action.title.toString().contains("reply", true) ||
                         action.title.toString().contains("답장"))) {
-                    when (comm) {
-                        "/start" -> {
-                            actionReply(action, "" +
-                                    "등록된 명령어:\n" +
-                                    "/start : 이 메시지 출력\n" +
-                                    "/say : 말시키기\n" +
-                                    "/game : 가상주식 게임\n" +
-                                    "/quiz : (준비중)\n" +
-                                    "/psycho : 성격유형 검사\n" +
-                                    "/dice : 랜덤 주사위\n" +
-                                    "/naver : 네이버 검색\n" +
-                                    "/gg : 구글 검색\n" +
-                                    "/yt : 유투브 검색\n" +
-                                    "/ddg : DuckDuckGo 검색\n" +
-                                    "/save : 데이터 저장\n" +
-                                    "/load : 데이터 불러오기\n" +
-                                    "/calc : (beta)사칙연산(+,-,*,/)\n" +
-                                    "/data : (준비중)\n" +
-                                    "/link : 외부 채팅방과 연동\n" +
-                                    "/reset : 저장된 변수 리셋\n" +
-                                    "/troll : ???")
+// Simplified indentation
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+        when (comm) {
+            "/start" -> {
+                actionReply(action, "" +
+                        "등록된 명령어:\n" +
+                        "/start : 이 메시지 출력\n" +
+                        "/say : 말시키기\n" +
+                        "/game : 가상주식 게임\n" +
+                        "/quiz : (준비중)\n" +
+                        "/psycho : 성격유형 검사\n" +
+                        "/dice : 랜덤 주사위\n" +
+                        "/naver : 네이버 검색\n" +
+                        "/gg : 구글 검색\n" +
+                        "/yt : 유투브 검색\n" +
+                        "/ddg : DuckDuckGo 검색\n" +
+                        "/save : 데이터 저장\n" +
+                        "/load : 데이터 불러오기\n" +
+                        "/calc : (beta)사칙연산(+,-,*,/)\n" +
+                        "/data : (준비중)\n" +
+                        "/link : 외부 채팅방과 연동\n" +
+                        "/reset : 저장된 변수 리셋\n" +
+                        "/troll : ???")
+            }
+
+            "/game" -> {
+                // used to be !gameMode
+                if ((stocksData[chatRoomName.toString()]?.get(2)) ?: 0 == 0) {
+                    stockAPI()
+                    stocksData[chatRoomName.toString()] = listOf(1000000F, 0, 1)
+                    actionReply(action, "" +
+                            "초기자금 100만원으로 가상주식 게임을 시작합니다.\n" +
+                            "매매 : /buy, /sell\n" +
+                            "잔고 : /balance\n" +
+                            "시세 : /info\n" +
+                            "종료 : /quit")
+                } else {
+                    actionReply(action, "이미 게임이 실행중입니다.")
+                }
+            }
+
+            "/balance" -> {
+                // used to be gameMode
+                if ((stocksData[chatRoomName.toString()]?.get(2)) ?: 0 == 1) {
+                    stockAPI()
+                    balance = stocksData[chatRoomName.toString()]?.get(0) as Float
+                    stocks = stocksData[chatRoomName.toString()]?.get(1) as Int
+                    val asset = balance + stocks * (price * (1 - fee / 100 - tax / 100))
+                    val won = moneyConvert(balance)
+                    val max = (balance / (price * (1 + fee / 100))).toInt()
+                    val sise = if (price == 0) {
+                        "네트워크 오류"
+                    } else {
+                        moneyConvert(price.toFloat())
+                    }
+                    actionReply(action, "" +
+                            "계좌잔고 : $won\n" +
+                            "주식잔고 : ${stocks}주\n" +
+                            "현재시세 : $sise\n" +
+                            "총 자산 : ${moneyConvert(asset)}\n" +
+                            "최대 ${max}주 매수 가능")
+                }
+            }
+
+            "/info" -> {
+                // used to be gameMode
+                if ((stocksData[chatRoomName.toString()]?.get(2)) ?: 0 == 1) {
+                    stockAPI()
+                    val sise = if (price == 0) {
+                        "네트워크 오류"
+                    } else {
+                        moneyConvert(price.toFloat())
+                    }
+                    actionReply(action, "" +
+                            "주당시가 : $sise\n" +
+                            "수수료 : ${fee}%\n" +
+                            "세금 : ${tax}% (매도시 적용)\n" +
+                            "금리 : ${interest}% (미적용)\n" +
+                            "명령 : /buy, /sell, /balance, /quit")
+                }
+            }
+
+            "/buy" -> {
+                // used to be gameMode
+                if ((stocksData[chatRoomName.toString()]?.get(2)) ?: 0 == 1) {
+                    stockAPI()
+                    balance = stocksData[chatRoomName.toString()]?.get(0) as Float
+                    stocks = stocksData[chatRoomName.toString()]?.get(1) as Int
+                    val amount = commArgv.getOrNull(1)?.toIntOrNull()
+                    if (amount == null || price == 0 || amount > (balance / (price * (1 + fee / 100))) || amount <= 0) {
+                        actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
+                    } else {
+                        val paid = price * amount * (1 + fee / 100) //수수료만 지불
+                        val minSell = price * (1 + fee / 100) / (1 - fee / 100 - tax / 100)
+                        balance -= paid
+                        stocks += amount
+                        actionReply(action, "${moneyConvert(price.toFloat())}에 ${amount}주를 매수합니다.\n" +
+                                "- 총 ${moneyConvert(paid)} 지불\n" +
+                                "- 매도 시세 ${moneyConvert(minSell)} 초과시 이윤")
+                        stocksData[chatRoomName.toString()] = listOf(balance, stocks, 1)
+                    }
+                }
+            }
+
+            "/sell" -> {
+                // used to be gameMode
+                if ((stocksData[chatRoomName.toString()]?.get(2)) ?: 0 == 1) {
+                    stockAPI()
+                    balance = stocksData[chatRoomName.toString()]?.get(0) as Float
+                    stocks = stocksData[chatRoomName.toString()]?.get(1) as Int
+                    val amount = commArgv.getOrNull(1)?.toIntOrNull()
+                    if (amount == null || price == 0 || amount > stocks || amount <= 0) {
+                        actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
+                    } else {
+                        val paid = price * amount * (1 - fee / 100 - tax / 100)
+                        val minBuy = price * (1 - fee / 100 - tax / 100) / (1 + fee / 100)
+                        balance += paid //수수료+세금 지불
+                        stocks -= amount
+                        actionReply(action, "${moneyConvert(price.toFloat())}에 ${amount}주를 매도합니다.\n" +
+                                "- 총 ${moneyConvert(paid)} 입금\n" +
+                                "- 매수 시세 ${moneyConvert(minBuy)} 미만시 이윤")
+                        stocksData[chatRoomName.toString()] = listOf(balance, stocks, 1)
+                    }
+                }
+            }
+
+            "/quit" -> {
+                // used to be gameMode
+                if ((stocksData[chatRoomName.toString()]?.get(2)) ?: 0 == 1) {
+                    actionReply(action, "게임이 종료되면 변수를 초기화하여 처음부터 다시 시작합니다. " +
+                            "정말로 종료하시겠습니까?\n(종료: /!quit)")
+                }
+            }
+
+            "/!quit" -> {
+                // used to be gameMode
+                if ((stocksData[chatRoomName.toString()]?.get(2)) ?: 0 == 1) {
+                    actionReply(action, "게임이 종료되었습니다. 변수를 초기화합니다.")
+                    stocksData.remove(chatRoomName.toString())
+                    balance = 1000000F
+                    stocks = 0
+                    price = 0
+                }
+            }
+
+            "/gamebeta" -> {
+                if (!milGame) {
+                    milGame = true
+                    actionReply(action, "준비중입니다.\n" +
+                            "종료: /quitbeta")
+                }
+            }
+
+            "/quitbeta" -> {
+                if (milGame) {
+                    milGame = false
+                    actionReply(action, "게임을 종료합니다.")
+                }
+            }
+
+            "/ttt" -> {
+                tttGame = true
+                var one = "１"
+                var two = "２"
+                var thr = "３"
+                var fou = "４"
+                var fiv = "５"
+                var six = "６"
+                var sev = "７"
+                var eig = "８"
+                var nin = "９"
+                actionReply(action, "" +
+                        "$one│$two│$thr\n" +
+                        "─┼─┼─\n" +
+                        "$fou│$fiv│$six\n" +
+                        "─┼─┼─\n" +
+                        "$sev│$eig│$nin\n" +
+                        "명령 예시: '/o 5', '/x 1'")
+                one = "　"
+                two = "　"
+                thr = "　"
+                fou = "　"
+                fiv = "　"
+                six = "　"
+                sev = "　"
+                eig = "　"
+                nin = "　"
+            }
+
+            "/o" -> {
+                if (tttGame) {
+                    actionReply(action, "준비중입니다.\n" +
+                            "　│　│　\n" +
+                            "─┼─┼─\n" +
+                            "　│　│　\n" +
+                            "─┼─┼─\n" +
+                            "　│　│　\n" +
+                            "게임종료")
+                    tttGame = false
+                }
+            }
+
+            "/x" -> {
+                if (tttGame) {
+                    actionReply(action, "준비중입니다.\n" +
+                            "　│　│　\n" +
+                            "─┼─┼─\n" +
+                            "　│　│　\n" +
+                            "─┼─┼─\n" +
+                            "　│　│　\n" +
+                            "게임종료")
+                    tttGame = false
+                }
+            }
+
+            "/quiz" -> {
+                if (!quizMode) {
+                    actionReply(action, "$question\n" +
+                            "정답은 '/answer'를 입력하세요.")
+                    quizMode = true
+                }
+            }
+
+            "/answer" -> {
+                if (quizMode) {
+                    actionReply(action, "정답: $answer")
+                    quizMode = false
+                }
+            }
+
+            "/psycho" -> {
+                val code = commArgv.getOrNull(1)?.toIntOrNull()
+                if (code == null) {
+                    actionReply(action, "성격검사를 실행합니다. 다음 질문에 답해주시기 바랍니다.\n\n" +
+                            "▶1. 결정을 내리는 방식에 더 와닿는 갈등을 고르세요. (1/2)\n" +
+                            "① 내가 해야 하는 일 vs 타인에 대한 배려\n" +
+                            "② 내가 원하는 것 vs 다수를 위한 것\n\n" +
+                            "▶2. 주변환경을 인식할 때 더 와닿는 갈등을 고르세요. (1/2)\n" +
+                            "① 경험을 통해서 vs 주관을 통해서\n" +
+                            "② 다양한 가능성 vs 당장의 현실\n\n" +
+                            "▶3. 평상시 자신의 행동방침을 고르세요. (1/2/3/4)\n" +
+                            "① 새로운 자극을 찾아 나섬\n" +
+                            "② 정보를 관리하고 체계화\n" +
+                            "③ 사람들을 모아 추진\n" +
+                            "④ 묵묵히 적응\n\n" +
+                            "답안은 명령어 인자에 숫자로 적어주시기 바랍니다.\n" +
+                            "예: 답이 2번, 1번, 4번일 경우\n" +
+                            "'/psycho 214' 입력")
+                } else {
+                    when (code) {
+                        111 -> {
+                            actionReply(action, "당신은 SeTi 타입입니다.\n" + //ESTP
+                                    "전형적인 싸이코패스로서 의도하지 않게 주변 환경에 큰 피해를 입히며 " +
+                                    "폭력적인 성향을 가지고 있습니다.")
                         }
-
-                        "/game" -> {
-                            // used to be !gameMode
-                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 0) {
-                                stockAPI()
-                                stocksData[chatRoomName.toString()] = listOf(1000000F, 0, 1)
-                                actionReply(action, "" +
-                                        "초기자금 100만원으로 가상주식 게임을 시작합니다.\n" +
-                                        "매매 : /buy, /sell\n" +
-                                        "잔고 : /balance\n" +
-                                        "시세 : /info\n" +
-                                        "종료 : /quit")
-                            } else {
-                                actionReply(action, "이미 게임이 실행중입니다.")
-                            }
+                        112 -> {
+                            actionReply(action, "당신은 NiFe 타입입니다.\n" + //INFJ
+                                    "전형적인 싸이코패스로서 온갖 속임수로 주변 사람들을 교묘히 조종하는 " +
+                                    "독재자의 성향을 가지고 있습니다.")
                         }
-
-                        "/balance" -> {
-                            // used to be gameMode
-                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
-                                stockAPI()
-                                balance = stocksData[chatRoomName.toString()]?.get(0) as Float
-                                stocks = stocksData[chatRoomName.toString()]?.get(1) as Int
-                                val asset = balance + stocks * (price * (1 - fee/100 - tax/100))
-                                val won = moneyConvert(balance)
-                                val max = (balance / (price * (1 + fee/100))).toInt()
-                                val sise = if (price == 0) { "네트워크 오류" } else { moneyConvert(price.toFloat()) }
-                                actionReply(action, "" +
-                                        "계좌잔고 : $won\n" +
-                                        "주식잔고 : ${stocks}주\n" +
-                                        "현재시세 : $sise\n" +
-                                        "총 자산 : moneyConvert(asset)\n" +
-                                        "최대 ${max}주 매수 가능")
-                            }
+                        113 -> {
+                            actionReply(action, "당신은 FeNi 타입입니다.\n" + //ENFJ
+                                    "전형적인 싸이코패스로서 온갖 권모술수를 이용하여 사람들을 기만하고 " +
+                                    "이용하려는 성향을 가지고 있습니다.")
                         }
-
-                        "/info" -> {
-                            // used to be gameMode
-                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
-                                stockAPI()
-                                val sise = if (price == 0) { "네트워크 오류" } else { moneyConvert(price.toFloat()) }
-                                actionReply(action, "" +
-                                        "주당시가 : $sise\n" +
-                                        "수수료 : ${fee}%\n" +
-                                        "세금 : ${tax}% (매도시 적용)\n" +
-                                        "금리 : ${interest}% (미적용)\n" +
-                                        "명령 : /buy, /sell, /balance, /quit")
-                            }
+                        114 -> {
+                            actionReply(action, "당신은 TiSe 타입입니다.\n" + //ISTP
+                                    "전형적인 싸이코패스로서 무자비하고 폭력적이며 자신의 이익만을 생각하는 " +
+                                    "무법자 성향을 가지고 있습니다.")
                         }
-
-                        "/buy" -> {
-                            // used to be gameMode
-                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
-                                stockAPI()
-                                balance = stocksData[chatRoomName.toString()]?.get(0) as Float
-                                stocks = stocksData[chatRoomName.toString()]?.get(1) as Int
-                                val amount = commArgv.getOrNull(1)?.toIntOrNull()
-                                if (amount == null || price == 0 || amount > (balance / (price * (1 + fee/100))) || amount <= 0) {
-                                    actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
-                                } else {
-                                    val paid = price * amount * (1 + fee/100) //수수료만 지불
-                                    val minSell = price * (1 + fee/100) / (1 - fee/100 - tax/100)
-                                    balance -= paid
-                                    stocks += amount
-                                    actionReply(action, "${moneyConvert(price.toFloat())}에 ${amount}주를 매수합니다.\n" +
-                                            "- 총 ${moneyConvert(paid)} 지불\n" +
-                                            "- 매도 시세 ${moneyConvert(minSell)} 초과시 이윤")
-                                    stocksData[chatRoomName.toString()] = listOf(balance, stocks, 1)
-                                }
-                            }
+                        121 -> {
+                            actionReply(action, "당신은 NeTi 타입입니다.\n" + //ENTP
+                                    "전형적인 싸이코패스로서 거짓말을 잘 하고 자기중심적이며 인간관계에 있어 " +
+                                    "파괴적인 성향을 가지고 있습니다.")
                         }
-
-                        "/sell" -> {
-                            // used to be gameMode
-                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
-                                stockAPI()
-                                balance = stocksData[chatRoomName.toString()]?.get(0) as Float
-                                stocks = stocksData[chatRoomName.toString()]?.get(1) as Int
-                                val amount = commArgv.getOrNull(1)?.toIntOrNull()
-                                if (amount == null || price == 0 || amount > stocks || amount <= 0) {
-                                    actionReply(action, "입력인자 또는 네트워크 오류가 발생했습니다.")
-                                } else {
-                                    val paid = price * amount * (1 - fee/100 - tax/100)
-                                    val minBuy = price * (1 - fee/100 - tax/100) / (1 + fee/100)
-                                    balance += paid //수수료+세금 지불
-                                    stocks -= amount
-                                    actionReply(action, "${moneyConvert(price.toFloat())}에 ${amount}주를 매도합니다.\n" +
-                                            "- 총 ${moneyConvert(paid)} 입금\n" +
-                                            "- 매수 시세 ${moneyConvert(minBuy)} 미만시 이윤")
-                                    stocksData[chatRoomName.toString()] = listOf(balance, stocks, 1)
-                                }
-                            }
+                        122 -> {
+                            actionReply(action, "당신은 SiFe 타입입니다.\n" + //ISFJ
+                                    "전형적인 싸이코패스로서 사소한 규율이라도 어길 경우 과하게 형벌하려는 " +
+                                    "악덕 관리자 성향을 가지고 있습니다.")
                         }
-
-                        "/quit" -> {
-                            // used to be gameMode
-                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
-                                actionReply(action, "게임이 종료되면 변수를 초기화하여 처음부터 다시 시작합니다. " +
-                                        "정말로 종료하시겠습니까?\n(종료: /!quit)")
-                            }
+                        123 -> {
+                            actionReply(action, "당신은 FeSi 타입입니다.\n" + //ESFJ
+                                    "전형적인 싸이코패스로서 흑색선전과 유언비어를 즐기고 사회적 지위를 얻기 " +
+                                    "위해 타인들을 누르려는 성향을 가지고 있습니다.")
                         }
-
-                        "/!quit" -> {
-                            // used to be gameMode
-                            if ((stocksData[chatRoomName.toString()]?.get(2))?:0 == 1) {
-                                actionReply(action, "게임이 종료되었습니다. 변수를 초기화합니다.")
-                                stocksData.remove(chatRoomName.toString())
-                                balance = 1000000F
-                                stocks = 0
-                                price = 0
-                            }
+                        124 -> {
+                            actionReply(action, "당신은 TiNe 타입입니다.\n" + //INTP
+                                    "전형적인 싸이코패스로서 타인들의 능력을 내리깔며 비웃고 도덕에 관심이 " +
+                                    "없는 매드사이언티스트의 성향을 가지고 있습니다.")
                         }
-
-                        "/quiz" -> {
-                            if (!quizMode) {
-                                actionReply(action, "$question\n정답은 '/answer'를 입력하세요.")
-                                quizMode = true
-                            }
+                        211 -> {
+                            actionReply(action, "당신은 SeFi 타입입니다.\n" + //ESFP
+                                    "전형적인 싸이코패스로서 충동적이고 폭력적이며 모두의 주목을 받기 위해 " +
+                                    "타인들을 끌어내리려는 성향을 가지고 있습니다.")
                         }
-
-                        "/answer" -> {
-                            if (quizMode) {
-                                actionReply(action, "정답: $answer")
-                                quizMode = false
-                            }
+                        212 -> {
+                            actionReply(action, "당신은 NiTe 타입입니다.\n" + //INTJ
+                                    "전형적인 싸이코패스로서 공감능력이 부족하고 목표를 위해 누구든 희생시키는 " +
+                                    "나르시시스트의 성향을 가지고 있습니다.")
                         }
-
-                        "/psycho" -> {
-                            val code = commArgv.getOrNull(1)?.toIntOrNull()
-                            if (code == null) {
-                                actionReply(action, "성격검사를 실행합니다. 다음 질문에 답해주시기 바랍니다.\n\n" +
-                                        "▶1. 결정을 내리는 방식에 더 와닿는 갈등을 고르세요. (1/2)\n" +
-                                        "① 내가 해야 하는 일 vs 타인에 대한 배려\n" +
-                                        "② 내가 원하는 것 vs 다수를 위한 것\n\n" +
-                                        "▶2. 주변환경을 인식할 때 더 와닿는 갈등을 고르세요. (1/2)\n" +
-                                        "① 경험을 통해서 vs 주관을 통해서\n" +
-                                        "② 다양한 가능성 vs 당장의 현실\n\n" +
-                                        "▶3. 평상시 자신의 행동방침을 고르세요. (1/2/3/4)\n" +
-                                        "① 새로운 자극을 찾아 나섬\n" +
-                                        "② 정보를 관리하고 체계화\n" +
-                                        "③ 사람들을 모아 추진\n" +
-                                        "④ 묵묵히 적응\n\n" +
-                                        "답안은 명령어 인자에 숫자로 적어주시기 바랍니다.\n" +
-                                        "예: 답이 2번, 1번, 4번일 경우\n" +
-                                        "'/psycho 214' 입력")
-                            } else {
-                                when (code) {
-                                    111 -> { actionReply(action, "당신은 SeTi 타입입니다.\n" + //ESTP
-                                            "전형적인 싸이코패스로서 의도하지 않게 주변 환경에 큰 피해를 입히며 " +
-                                            "폭력적인 성향을 가지고 있습니다.") }
-                                    112 -> { actionReply(action, "당신은 NiFe 타입입니다.\n" + //INFJ
-                                            "전형적인 싸이코패스로서 주변 사람들을 교묘히 이용하며 설득시키는 " +
-                                            "독재자의 성향을 가지고 있습니다.") }
-                                    113 -> { actionReply(action, "당신은 FeNi 타입입니다.\n" + //ENFJ
-                                            "전형적인 싸이코패스로서 사람들을 감정적으로 취약한 상태로 만들어 " +
-                                            "이용하려는 성향을 가지고 있습니다.") }
-                                    114 -> { actionReply(action, "당신은 TiSe 타입입니다.\n" + //ISTP
-                                            "전형적인 싸이코패스로서 무자비하고 폭력적이며 자신의 이익만을 생각하는 " +
-                                            "무법자 성향을 가지고 있습니다.") }
-                                    121 -> { actionReply(action, "당신은 NeTi 타입입니다.\n" + //ENTP
-                                            "전형적인 싸이코패스로서 거짓말을 잘 하고 자기중심적이며 인간관계에 있어 " +
-                                            "파괴적인 성향을 가지고 있습니다.") }
-                                    122 -> { actionReply(action, "당신은 SiFe 타입입니다.\n" + //ISFJ
-                                            "전형적인 싸이코패스로서 사소한 규율이라도 어길 경우 과하게 형벌하려는 " +
-                                            "악덕 관리자 성향을 가지고 있습니다.") }
-                                    123 -> { actionReply(action, "당신은 FeSi 타입입니다.\n" + //ESFJ
-                                            "전형적인 싸이코패스로서 흑색선전과 유언비어를 즐기고 사회적 지위를 얻기 " +
-                                            "위해 타인들을 누르려는 성향을 가지고 있습니다.") }
-                                    124 -> { actionReply(action, "당신은 TiNe 타입입니다.\n" + //INTP
-                                            "전형적인 싸이코패스로서 타인들의 능력을 내리깔며 비웃고 도덕에 관심이 " +
-                                            "없는 매드사이언티스트의 성향을 가지고 있습니다.") }
-                                    211 -> { actionReply(action, "당신은 SeFi 타입입니다.\n" + //ESFP
-                                            "전형적인 싸이코패스로서 충동적이고 폭력적이며 모두의 주목을 받기 위해 " +
-                                            "타인들을 끌어내리려는 성향을 가지고 있습니다.") }
-                                    212 -> { actionReply(action, "당신은 NiTe 타입입니다.\n" + //INTJ
-                                            "전형적인 싸이코패스로서 공감능력이 부족하고 목표를 위해 누구든 희생시키는 " +
-                                            "나르시시스트의 성향을 가지고 있습니다.") }
-                                    213 -> { actionReply(action, "당신은 TeNi 타입입니다.\n" + //ENTJ
-                                            "전형적인 싸이코패스로서 공격적이고 무슨 수를 써서라도 상대방을 " +
-                                            "굴복시키려는 성향을 가지고 있습니다.") }
-                                    214 -> { actionReply(action, "당신은 FiSe 타입입니다.\n" + //ISFP
-                                            "전형적인 싸이코패스로서 자기중심적이고 충동적이며 타협될 수 없는 " +
-                                            "소모적인 성향을 가지고 있습니다.") }
-                                    221 -> { actionReply(action, "당신은 NeFi 타입입니다.\n" + //ENFP
-                                            "전형적인 싸이코패스로서 체제에 반항적이고 교묘히 방해행위를 주도하는 " +
-                                            "악동의 성향을 가지고 있습니다.") }
-                                    222 -> { actionReply(action, "당신은 SiTe 타입입니다.\n" + //ISTJ
-                                            "전형적인 싸이코패스로서 까다롭고 공감능력이 부족하며 극한의 절제를 강요하는 " +
-                                            "극단주의적인 성향을 가지고 있습니다.") }
-                                    223 -> { actionReply(action, "당신은 TeSi 타입입니다.\n" + //ESTJ
-                                            "전형적인 싸이코패스로서 위협적이고 폭력적이며 자신의 방식을 강요하는 " +
-                                            "조폭보스의 성향을 가지고 있습니다.") }
-                                    224 -> { actionReply(action, "당신은 FiNe 타입입니다.\n" + //INFP
-                                            "전형적인 싸이코패스로서 타인들의 감정을 조작하고 주변에 보이는 모든것을 " +
-                                            "파괴시키고자 하는 성향을 가지고 있습니다.") }
-                                }
-                            }
+                        213 -> {
+                            actionReply(action, "당신은 TeNi 타입입니다.\n" + //ENTJ
+                                    "전형적인 싸이코패스로서 공격적이고 무슨 수를 써서라도 상대방을 " +
+                                    "굴복시키려는 성향을 가지고 있습니다.")
                         }
-
-                        "/dice" -> {
-                            val dice = Math.random() * 6 + 1
-                            actionReply(action, "주사위를 굴려 " + dice.toString()[0] +
-                                    "이(가) 나왔습니다.")
+                        214 -> {
+                            actionReply(action, "당신은 FiSe 타입입니다.\n" + //ISFP
+                                    "전형적인 싸이코패스로서 자기중심적이고 충동적이며 타인들을 기만하고 " +
+                                    "타협과 협상이 불가능한 성향을 가지고 있습니다.")
                         }
-
-                        "/naver" -> {
-                            var q = text.substringAfter("/naver ")
-                            if (commArgv.getOrNull(1).isNullOrBlank()) {
-                                actionReply(action, "검색어 패러미터가 없습니다.")
-                            } else {
-                                q = java.net.URLEncoder.encode(q, "utf-8")
-                                actionReply(action,
-                                        "https://search.naver.com/search.naver?query=$q"
-                                )
-                            }
+                        221 -> {
+                            actionReply(action, "당신은 NeFi 타입입니다.\n" + //ENFP
+                                    "전형적인 싸이코패스로서 체제에 반항적이고 교묘히 방해행위를 주도하는 " +
+                                    "악동의 성향을 가지고 있습니다.")
                         }
-
-                        "/gg" -> {
-                            var q = text.substringAfter("/gg ")
-                            if (commArgv.getOrNull(1).isNullOrBlank()) {
-                                actionReply(action, "검색어 패러미터가 없습니다.")
-                            } else {
-                                q = java.net.URLEncoder.encode(q, "utf-8")
-                                actionReply(action,
-                                        "https://www.google.com/search?q=$q"
-                                )
-                            }
+                        222 -> {
+                            actionReply(action, "당신은 SiTe 타입입니다.\n" + //ISTJ
+                                    "전형적인 싸이코패스로서 까다롭고 공감능력이 부족하며 극한의 절제를 강요하는 " +
+                                    "극단주의적인 성향을 가지고 있습니다.")
                         }
-
-                        "/yt" -> {
-                            var q = text.substringAfter("/yt ")
-                            if (commArgv.getOrNull(1).isNullOrBlank()) {
-                                actionReply(action, "검색어 패러미터가 없습니다.")
-                            } else {
-                                q = java.net.URLEncoder.encode(q, "utf-8")
-                                actionReply(action,
-                                        "https://www.youtube.com/results?search_query=$q"
-                                )
-                            }
+                        223 -> {
+                            actionReply(action, "당신은 TeSi 타입입니다.\n" + //ESTJ
+                                    "전형적인 싸이코패스로서 위협적이고 폭력적이며 자신의 방식을 강요하는 " +
+                                    "조폭보스의 성향을 가지고 있습니다.")
                         }
-
-                        "/ddg" -> {
-                            var q = text.substringAfter("/ddg ")
-                            if (commArgv.getOrNull(1).isNullOrBlank()) {
-                                actionReply(action, "검색어 패러미터가 없습니다.")
-                            } else {
-                                q = java.net.URLEncoder.encode(q, "utf-8")
-                                actionReply(action,
-                                        "https://duckduckgo.com/?t=ffab&q=$q"
-                                )
-                            }
-                        }
-
-                        "/save" -> {
-                            saved = text.substringAfter("/save ")
-                            if (commArgv.getOrNull(1).isNullOrBlank()) {
-                                actionReply(action, "데이터를 저장할 수 없습니다.")
-                            } else {
-                                actionReply(action,
-                                        "'$saved'\n위 데이터를 저장했습니다. 불러오려면 /load를 입력하세요."
-                                )
-                            }
-                        }
-
-                        "/load" -> {
-                            if (saved == "") {
-                                actionReply(action, "저장된 데이터가 없습니다.")
-                            } else {
-                                actionReply(action,
-                                        "저장된 데이터는 다음과 같습니다:\n$saved"
-                                )
-                            }
-                        }
-
-                        "/say" -> {
-                            val q = text.substringAfter("/say ")
-                            if (commArgv.getOrNull(1).isNullOrBlank()) {
-                                actionReply(action, "패러미터가 없습니다.")
-                            } else {
-                                actionReply(action, q)
-                            }
-                        }
-
-                        "/calc" -> {
-                            val expr = text.substringAfter("/calc ")
-                            if (expr.contains("+")) {
-                                val a = expr.substringBefore("+").toIntOrNull()
-                                val b = expr.substringAfter("+").toIntOrNull()
-                                if (a == null || b == null) {
-                                    actionReply(action, "입력인자 오류가 발생했습니다.")
-
-                                } else {
-                                    actionReply(action, "${a + b}")
-                                }
-                            }
-                            if (expr.contains("-")) {
-                                val a = expr.substringBefore("-").toIntOrNull()
-                                val b = expr.substringAfter("-").toIntOrNull()
-                                if (a == null || b == null) {
-                                    actionReply(action, "입력인자 오류가 발생했습니다.")
-
-                                } else {
-                                    actionReply(action, "${a - b}")
-                                }
-                            }
-                            if (expr.contains("*")) {
-                                val a = expr.substringBefore("*").toIntOrNull()
-                                val b = expr.substringAfter("*").toIntOrNull()
-                                if (a == null || b == null) {
-                                    actionReply(action, "입력인자 오류가 발생했습니다.")
-
-                                } else {
-                                    actionReply(action, "${a * b}")
-                                }
-                            }
-                            if (expr.contains("/")) {
-                                val a = expr.substringBefore("/").toIntOrNull()
-                                val b = expr.substringAfter("/").toIntOrNull()
-                                if (a == null || b == null || b == 0) {
-                                    actionReply(action, "입력인자 오류가 발생했습니다.")
-
-                                } else {
-                                    actionReply(action, "${a / b}")
-                                }
-                            }
-                        }
-
-                        "/data" -> {
-                            var q = text.substringAfter("/data ")
-                            //actionReply(action, "${personalData[sender]?.get(0)?.toString()}")
-                            actionReply(action, "$stocksData")
-                            //actionReply(action, "$personalData")
-                        }
-
-                        "/link" -> {
-                            savedNoti = action
-                            NotiListener.savedNoti = action
-                            linkMode = true
-                            actionReply(action, "봇이 외부 채팅방과 연동됩니다.\n" +
-                                    "/send 명령어로 현 채팅방에 메시지를 보낼 수 있습니다.\n" +
-                                    "/unlink 명령어로 연동을 해제할 수 있습니다.")
-                        }
-
-                        "/unlink" -> {
-                            savedNoti = null
-                            linkMode = false
-                            actionReply(action, "연동을 해제합니다.")
-                        }
-
-                        "/send" -> {
-                            if (linkMode) {
-                                val q = text.substringAfter("/send ")
-                                savedNoti?.let { actionReply(it, "외부 수신 메시지:\n$q") }
-                            }
-                        }
-
-                        "/reset" -> {
-                            actionReply(action, "모든 변수가 초기화되었습니다.")
-                            // needs more things here
-                            savedNoti = null
-                            NotiListener.savedNoti = null
-                            linkMode = false
-                            stocksData = mutableMapOf()
-                            quizMode = false
-                            saved = ""
-                            balance = 1000000F
-                            stocks = 0
-                            price = 0
-                        }
-
-                        "/troll" -> {
-                            actionReply(action, "" +
-                                    "....................../´¯/)  \n" +
-                                    "....................,/¯../  \n" +
-                                    ".................../..../  \n" +
-                                    "............./´¯/'...'/´¯¯`·¸  \n" +
-                                    "........../'/.../..../......./¨¯\\  \n" +
-                                    "........('(...´...´.... ¯~/'...')  \n" +
-                                    ".........\\.................'...../  \n" +
-                                    "..........''...\\.......... _.·´  \n" +
-                                    "............\\..............(  \n" +
-                                    "..............\\.............\\...\n" +
-                                    "Fahk you azz hore")
+                        224 -> {
+                            actionReply(action, "당신은 FiNe 타입입니다.\n" + //INFP
+                                    "전형적인 싸이코패스로서 타인들의 감정을 조작하고 자신이 소속된 공동체를 " +
+                                    "와해시키려는 성향을 가지고 있습니다.")
                         }
                     }
+                }
+            }
+
+            "/dice" -> {
+                val dice = Math.random() * 6 + 1
+                actionReply(action, "주사위를 굴려 " + dice.toString()[0] +
+                        "이(가) 나왔습니다.")
+            }
+
+            "/naver" -> {
+                var q = text.substringAfter("/naver ")
+                if (commArgv.getOrNull(1).isNullOrBlank()) {
+                    actionReply(action, "검색어 패러미터가 없습니다.")
+                } else {
+                    q = java.net.URLEncoder.encode(q, "utf-8")
+                    actionReply(action,
+                            "https://search.naver.com/search.naver?query=$q"
+                    )
+                }
+            }
+
+            "/gg" -> {
+                var q = text.substringAfter("/gg ")
+                if (commArgv.getOrNull(1).isNullOrBlank()) {
+                    actionReply(action, "검색어 패러미터가 없습니다.")
+                } else {
+                    q = java.net.URLEncoder.encode(q, "utf-8")
+                    actionReply(action,
+                            "https://www.google.com/search?q=$q"
+                    )
+                }
+            }
+
+            "/yt" -> {
+                var q = text.substringAfter("/yt ")
+                if (commArgv.getOrNull(1).isNullOrBlank()) {
+                    actionReply(action, "검색어 패러미터가 없습니다.")
+                } else {
+                    q = java.net.URLEncoder.encode(q, "utf-8")
+                    actionReply(action,
+                            "https://www.youtube.com/results?search_query=$q"
+                    )
+                }
+            }
+
+            "/ddg" -> {
+                var q = text.substringAfter("/ddg ")
+                if (commArgv.getOrNull(1).isNullOrBlank()) {
+                    actionReply(action, "검색어 패러미터가 없습니다.")
+                } else {
+                    q = java.net.URLEncoder.encode(q, "utf-8")
+                    actionReply(action,
+                            "https://duckduckgo.com/?t=ffab&q=$q"
+                    )
+                }
+            }
+
+            "/save" -> {
+                saved = text.substringAfter("/save ")
+                if (commArgv.getOrNull(1).isNullOrBlank()) {
+                    actionReply(action, "데이터를 저장할 수 없습니다.")
+                } else {
+                    actionReply(action,
+                            "'$saved'\n위 데이터를 저장했습니다. 불러오려면 /load를 입력하세요."
+                    )
+                }
+            }
+
+            "/load" -> {
+                if (saved == "") {
+                    actionReply(action, "저장된 데이터가 없습니다.")
+                } else {
+                    actionReply(action,
+                            "저장된 데이터는 다음과 같습니다:\n$saved"
+                    )
+                }
+            }
+
+            "/say" -> {
+                val q = text.substringAfter("/say ")
+                if (commArgv.getOrNull(1).isNullOrBlank()) {
+                    actionReply(action, "패러미터가 없습니다.")
+                } else {
+                    actionReply(action, q)
+                }
+            }
+
+            "/calc" -> {
+                val expr = text.substringAfter("/calc ")
+                if (expr.contains("+")) {
+                    val a = expr.substringBefore("+").toIntOrNull()
+                    val b = expr.substringAfter("+").toIntOrNull()
+                    if (a == null || b == null) {
+                        actionReply(action, "입력인자 오류가 발생했습니다.")
+
+                    } else {
+                        actionReply(action, "${a + b}")
+                    }
+                }
+                if (expr.contains("-")) {
+                    val a = expr.substringBefore("-").toIntOrNull()
+                    val b = expr.substringAfter("-").toIntOrNull()
+                    if (a == null || b == null) {
+                        actionReply(action, "입력인자 오류가 발생했습니다.")
+
+                    } else {
+                        actionReply(action, "${a - b}")
+                    }
+                }
+                if (expr.contains("*")) {
+                    val a = expr.substringBefore("*").toIntOrNull()
+                    val b = expr.substringAfter("*").toIntOrNull()
+                    if (a == null || b == null) {
+                        actionReply(action, "입력인자 오류가 발생했습니다.")
+
+                    } else {
+                        actionReply(action, "${a * b}")
+                    }
+                }
+                if (expr.contains("/")) {
+                    val a = expr.substringBefore("/").toIntOrNull()
+                    val b = expr.substringAfter("/").toIntOrNull()
+                    if (a == null || b == null || b == 0) {
+                        actionReply(action, "입력인자 오류가 발생했습니다.")
+
+                    } else {
+                        actionReply(action, "${a / b}")
+                    }
+                }
+            }
+
+            "/date" -> {
+                actionReply(action, "준비중입니다.")
+            }
+
+            "/data" -> {
+                var q = text.substringAfter("/data ")
+                //actionReply(action, "${personalData[sender]?.get(0)?.toString()}")
+                actionReply(action, "$stocksData")
+                //actionReply(action, "$personalData")
+            }
+
+            "/link" -> {
+                savedNoti = action
+                NotiListener.savedNoti = action
+                linkMode = true
+                actionReply(action, "봇이 외부 채팅방과 연동됩니다.\n" +
+                        "/send 명령어로 현 채팅방에 메시지를 보낼 수 있습니다.\n" +
+                        "/unlink 명령어로 연동을 해제할 수 있습니다.")
+            }
+
+            "/unlink" -> {
+                savedNoti = null
+                linkMode = false
+                actionReply(action, "연동을 해제합니다.")
+            }
+
+            "/send" -> {
+                if (linkMode) {
+                    val q = text.substringAfter("/send ")
+                    savedNoti?.let { actionReply(it, "외부 수신 메시지:\n$q") }
+                }
+            }
+
+            "/reset" -> {
+                actionReply(action, "모든 변수가 초기화되었습니다.")
+                // needs more things here
+                savedNoti = null
+                NotiListener.savedNoti = null
+                linkMode = false
+                stocksData = mutableMapOf()
+                quizMode = false
+                saved = ""
+                balance = 1000000F
+                stocks = 0
+                price = 0
+            }
+
+            "/troll" -> {
+                actionReply(action, "" +
+                        "....................../´¯/)  \n" +
+                        "....................,/¯../  \n" +
+                        ".................../..../  \n" +
+                        "............./´¯/'...'/´¯¯`·¸  \n" +
+                        "........../'/.../..../......./¨¯\\  \n" +
+                        "........('(...´...´.... ¯~/'...')  \n" +
+                        ".........\\.................'...../  \n" +
+                        "..........''...\\.......... _.·´  \n" +
+                        "............\\..............(  \n" +
+                        "..............\\.............\\...\n" +
+                        "Fahk you azz hore")
+            }
+        }
+////////////////////////////////////////////////////////////////////////////////////////////////////////
                 }
             }
         }
